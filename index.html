@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>护理质控管理系统 · 访问验证</title>
+<meta name="robots" content="noindex, nofollow">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(135deg, #007A7D 0%, #00595B 100%);
+    padding: 24px;
+  }
+  .card {
+    width: 100%; max-width: 400px; background: #fff; border-radius: 12px;
+    padding: 40px 36px 32px; box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22);
+  }
+  .mark {
+    width: 56px; height: 56px; margin: 0 auto 20px; border-radius: 50%;
+    background: #00999C; color: #fff; font-size: 15px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; letter-spacing: 1px;
+  }
+  h1 { margin: 0 0 6px; font-size: 20px; font-weight: 600; color: #1f2329; text-align: center; }
+  .sub { margin: 0 0 26px; font-size: 13px; color: #8c8c8c; text-align: center; }
+  label { display: block; font-size: 13px; color: #595959; margin-bottom: 8px; }
+  input[type="password"] {
+    width: 100%; height: 42px; padding: 0 12px; font-size: 15px; letter-spacing: 4px;
+    border: 1px solid #d9d9d9; border-radius: 6px; outline: none; transition: all 0.2s;
+  }
+  input[type="password"]:focus { border-color: #00999C; box-shadow: 0 0 0 2px rgba(0, 153, 156, 0.14); }
+  button {
+    width: 100%; height: 42px; margin-top: 20px; border: none; border-radius: 6px;
+    background: #00999C; color: #fff; font-size: 15px; font-weight: 500; cursor: pointer;
+    transition: background 0.2s;
+  }
+  button:hover { background: #10AEB1; }
+  button[disabled] { background: #8fd0d1; cursor: progress; }
+  .error {
+    margin-top: 16px; padding: 9px 12px; border-radius: 6px; font-size: 13px;
+    background: #fff2f0; border: 1px solid #ffccc7; color: #cf1322;
+  }
+  .foot { margin-top: 24px; font-size: 12px; color: #bfbfbf; text-align: center; line-height: 1.7; }
+  #boot {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: #00595B; color: #e6f5f5; font-size: 14px; letter-spacing: 1px;
+  }
+</style>
+</head>
+<body>
+  <div id="boot">正在加载…</div>
+
+  <form class="card" id="gate" autocomplete="off" hidden>
+    <div class="mark">1907</div>
+    <h1>护理质控管理系统</h1>
+    <p class="sub">演示环境 · 请输入访问密码</p>
+    <label for="password">访问密码</label>
+    <input id="password" name="password" type="password" inputmode="numeric" autocomplete="current-password" required>
+    <button type="submit" id="submit">进入系统</button>
+    <div class="error" id="error" hidden></div>
+    <p class="foot">大连大学附属中山医院<br/>本页面为高保真原型演示，数据均为模拟数据</p>
+  </form>
+
+  <script>
+    // 构建时注入：仅包含 KDF 参数，密钥由输入的密码在本机派生，页面内不存密码
+    var KDF = {"salt":"jivymEAHDEJYdPxRiSibEg==","iv":"4QM+RpnEvwQca4WW","iterations":200000};
+    var PAYLOAD_URL = "demo.enc.json";
+
+    var boot = document.getElementById("boot");
+    var form = document.getElementById("gate");
+    var input = document.getElementById("password");
+    var button = document.getElementById("submit");
+    var error = document.getElementById("error");
+    var payload = null;
+
+    loadPayload();
+
+    form.addEventListener("submit", function (event) {
+      event.preventDefault();
+      error.hidden = true;
+      setBusy(true);
+
+      unlock(input.value)
+        .then(function (html) {
+          document.open();
+          document.write(html);
+          document.close();
+        })
+        .catch(function () {
+          setBusy(false);
+          error.textContent = "密码错误，请重新输入";
+          error.hidden = false;
+          input.value = "";
+          input.focus();
+        });
+    });
+
+    // 在密码框内按回车等同于点「进入系统」
+    input.addEventListener("keydown", function (event) {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      if (typeof form.requestSubmit === "function") {
+        form.requestSubmit();
+      } else {
+        form.dispatchEvent(new Event("submit", { cancelable: true }));
+      }
+    });
+
+    function loadPayload() {
+      fetch(PAYLOAD_URL, { cache: "no-store" })
+        .then(function (response) {
+          if (!response.ok) throw new Error("HTTP " + response.status);
+          return response.json();
+        })
+        .then(function (json) {
+          if (
+            json.iterations !== KDF.iterations ||
+            json.salt !== KDF.salt ||
+            json.iv !== KDF.iv
+          ) {
+            boot.textContent = "内容与页面版本不一致，请强制刷新（Ctrl+F5）重试";
+            return;
+          }
+          payload = json;
+          boot.remove();
+          form.hidden = false;
+          input.focus();
+        })
+        .catch(function () {
+          boot.textContent = "内容加载失败，请刷新重试";
+        });
+    }
+
+    function setBusy(busy) {
+      button.disabled = busy;
+      button.textContent = busy ? "校验中…" : "进入系统";
+    }
+
+    function unlock(password) {
+      if (!payload) return Promise.reject(new Error("payload missing"));
+      if (!window.crypto || !window.crypto.subtle) {
+        return Promise.reject(new Error("crypto unavailable"));
+      }
+      if (!password) return Promise.reject(new Error("empty password"));
+
+      var salt = base64ToBytes(payload.salt);
+      var iv = base64ToBytes(payload.iv);
+      var data = base64ToBytes(payload.data);
+
+      return window.crypto.subtle
+        .importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveKey"])
+        .then(function (baseKey) {
+          return window.crypto.subtle.deriveKey(
+            {
+              name: "PBKDF2",
+              salt: salt,
+              iterations: payload.iterations,
+              hash: "SHA-256",
+            },
+            baseKey,
+            { name: "AES-GCM", length: 256 },
+            false,
+            ["decrypt"]
+          );
+        })
+        .then(function (key) {
+          return window.crypto.subtle.decrypt({ name: "AES-GCM", iv: iv }, key, data);
+        })
+        .then(function (buffer) {
+          return new TextDecoder().decode(buffer);
+        });
+    }
+
+    function base64ToBytes(value) {
+      var binary = atob(value);
+      var bytes = new Uint8Array(binary.length);
+      for (var i = 0; i < binary.length; i += 1) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      return bytes;
+    }
+  </script>
+</body>
+</html>
